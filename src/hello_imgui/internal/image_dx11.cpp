@@ -42,10 +42,15 @@ namespace HelloImGui
         pTexture->Release();
     }
 
-    ImageDx11::~ImageDx11()
+    void ImageDx11::_impl_ReleaseTexture()
     {
         if (ShaderResourceView)
             ShaderResourceView->Release();
+		ShaderResourceView = nullptr;
+    }
+
+    ImageDx11::~ImageDx11() {
+        _impl_ReleaseTexture();
     }
 
     ImTextureID ImageDx11::TextureID()

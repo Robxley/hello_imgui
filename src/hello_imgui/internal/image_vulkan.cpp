@@ -215,8 +215,7 @@ namespace HelloImGui
         //this->imTextureId = (ImTextureID)(intptr_t)vkImageView;
     }
 
-    // Destructor to clean up Vulkan resources
-    ImageVulkan::~ImageVulkan()
+    void ImageVulkan::_impl_ReleaseTexture()
     {
         VulkanGlobals& vkGlobals = GetVulkanGlobals();
         auto& self = *this;
@@ -228,6 +227,13 @@ namespace HelloImGui
         vkDestroyImage(vkGlobals.Device, self.Image, nullptr);
         vkFreeMemory(vkGlobals.Device, self.ImageMemory, nullptr);
         ImGui_ImplVulkan_RemoveTexture(self.DS);
+		self.DS = {};
+    }
+
+    // Destructor to clean up Vulkan resources
+    ImageVulkan::~ImageVulkan()
+    {
+        _impl_ReleaseTexture();
     }
 
     ImTextureID ImageVulkan::TextureID()

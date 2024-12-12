@@ -14,6 +14,8 @@ namespace HelloImGui
 
         ImTextureID TextureID() override;
         void _impl_StoreTexture(int width, int height, unsigned char* image_data_rgba) override;
+        void _impl_UploadTexture(int width, int height, unsigned char* image_data_rgba) override;
+        void _impl_ReleaseTexture() override;
 
         GLuint TextureId = 0;
     };

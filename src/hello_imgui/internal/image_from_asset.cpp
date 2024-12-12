@@ -38,10 +38,8 @@ namespace HelloImGui
     static std::unordered_map<std::string, ImageAbstractPtr > gImageFromAssetMap;
 
 
-    static ImageAbstractPtr _GetCachedImage(const char*assetPath)
+    static ImageAbstractPtr _GetImageFromMemory(int width, int height, unsigned char* image_data_rgba)
     {
-        if (gImageFromAssetMap.find(assetPath) != gImageFromAssetMap.end())
-            return gImageFromAssetMap.at(assetPath);
 
         HelloImGui::RendererBackendType rendererBackendType = HelloImGui::GetRunnerParams()->rendererBackendType;
         ImageAbstractPtr concreteImage;
@@ -64,44 +62,105 @@ namespace HelloImGui
         #endif
         if (concreteImage == nullptr)
         {
-            HelloImGui::Log(LogLevel::Warning, "ImageFromAsset: not implemented for this rendering backend!");
-            gImageFromAssetMap[assetPath] = nullptr; // Cache the failure
+            HelloImGui::Log(LogLevel::Warning, "_GetImageFromMemory: not implemented for this rendering backend!");
             return nullptr;
         }
 
-        unsigned char* image_data_rgba;
-        {
-            // Load the image using stbi_load_from_memory
-            auto assetData = LoadAssetFileData(assetPath);
-            IM_ASSERT(assetData.data != nullptr);
-            image_data_rgba = stbi_load_from_memory(
-                (unsigned char *)assetData.data, (int)assetData.dataSize,
-                &concreteImage->Width, &concreteImage->Height, NULL, 4);
-            FreeAssetFileData(&assetData);
-        }
+        IM_ASSERT(image_data_rgba != nullptr && width > 0 && height > 0 && "_GetImageFromMemory: image_data_rgba is empty!");
+    
+        concreteImage->_impl_StoreTexture(width, height, image_data_rgba);
 
-        if (image_data_rgba == NULL)
-        {
-            IM_ASSERT(false && "_GetCachedImage: Failed to load image!");
-            throw std::runtime_error("_GetCachedImage: Failed to load image!");
-        }
-        concreteImage->_impl_StoreTexture(concreteImage->Width, concreteImage->Height, image_data_rgba);
-        stbi_image_free(image_data_rgba);
-
-        gImageFromAssetMap[assetPath] = concreteImage;
         return concreteImage;
     }
 
-
-    void ImageFromAsset(
-        const char *assetPath, const ImVec2& size,
-        const ImVec2& uv0, const ImVec2& uv1,
-        const ImVec4& tint_col, const ImVec4& border_col)
+    static bool _UpdateImageFromMemory(ImageAbstractPtr & concreteImage, unsigned char * image_data_rgba, int width, int height)
     {
-        auto cachedImage = _GetCachedImage(assetPath);
+
+        if (image_data_rgba == nullptr || width <= 0 || height <= 0)
+        {
+            IM_ASSERT(false && "_UpdateImageFromMemory: Memory image is empty!");
+            throw std::runtime_error("_UpdateImageFromMemory: Memory image is empty!");
+        }
+
+        if(!concreteImage) {
+            concreteImage = _GetImageFromMemory(width, height, image_data_rgba);
+            return true;
+        }
+        
+        concreteImage->_impl_UploadTexture(width, height, image_data_rgba);
+        return false;
+    }
+
+    static ImageAbstractPtr _GetCachedAssetImage(const char*assetPath, bool updateCache = false)
+    {
+        
+        ImageAbstractPtr concreteImage;
+        if (gImageFromAssetMap.find(assetPath) != gImageFromAssetMap.end())
+        {
+            concreteImage = gImageFromAssetMap.at(assetPath);
+            if (updateCache == false)
+                return concreteImage;
+        }
+
+        unsigned char* image_data_rgba;
+        int width, height;
+        {
+            // Load the image using stbi_load_from_memory
+            auto assetData = LoadAssetFileData(assetPath);
+            
+            IM_ASSERT(assetData.data != nullptr);
+            image_data_rgba = stbi_load_from_memory(
+                (unsigned char *)assetData.data, (int)assetData.dataSize,
+                &width, &height, NULL, 4);
+            FreeAssetFileData(&assetData);
+        }
+
+        if (image_data_rgba == nullptr)
+        {
+            IM_ASSERT(false && "_GetCachedAssetImage: Failed to load image!");
+            throw std::runtime_error("_GetCachedImage: Failed to load image!");
+        }
+
+        if(_UpdateImageFromMemory(concreteImage, image_data_rgba, width, height))   // if a new image pointer was created
+            gImageFromAssetMap[assetPath] = concreteImage;
+
+        stbi_image_free(image_data_rgba);
+
+        return concreteImage;
+    }
+
+    static ImageAbstractPtr _GetCachedMemoryImage(const char*assetName, unsigned char * image_data_rgba, int width, int height)
+    {
+        ImageAbstractPtr concreteImage;
+        if (gImageFromAssetMap.find(assetName) != gImageFromAssetMap.end())
+        {
+            concreteImage = gImageFromAssetMap.at(assetName);
+            if (image_data_rgba == nullptr)     // No need to update
+                return concreteImage;
+        }
+
+        if (image_data_rgba == nullptr || width <= 0 || height <= 0)
+        {
+            IM_ASSERT(false && "_GetCachedMemoryImage: Memory image is empty!");
+            throw std::runtime_error("_GetCachedMemoryImage: Memory image is empty!");
+        }
+
+        if(_UpdateImageFromMemory(concreteImage, image_data_rgba, width, height))
+            gImageFromAssetMap[assetName] = concreteImage;
+
+        return concreteImage;
+    }
+
+    inline void _CachedImGuiImage(
+        ImageAbstractPtr & cachedImage,
+        const ImVec2& size,
+        const ImVec2& uv0, const ImVec2& uv1,
+        const ImVec4& tint_col, const ImVec4& border_col,
+        const char *txtFail)
+    {
         if (cachedImage == nullptr)
         {
-            ImGui::TextColored(ImVec4(1.f, 0.f, 0.f, 1.f), "ImageFromAsset: fail!");
+            ImGui::TextColored(ImVec4(1.f, 0.f, 0.f, 1.f), txtFail);
             return;
         }
         auto textureId = cachedImage->TextureID();
@@ -110,43 +169,163 @@ namespace HelloImGui
         ImGui::Image(textureId, displayedSize, uv0, uv1, tint_col, border_col);
     }
 
-    bool ImageButtonFromAsset(const char *assetPath, const ImVec2& size, const ImVec2& uv0,  const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col)
+    void ImageFromAsset(
+        const char *assetPath,
+        bool updateCache, 
+        const ImVec2& size,
+        const ImVec2& uv0, const ImVec2& uv1,
+        const ImVec4& tint_col, const ImVec4& border_col)
     {
-        auto cachedImage = _GetCachedImage(assetPath);
+        auto cachedImage = _GetCachedAssetImage(assetPath, updateCache);
+        _CachedImGuiImage(cachedImage, size, uv0, uv1, tint_col, border_col, "ImageFromAsset: fail!");
+    }
+
+    void ImageFromAsset(
+        const char *assetPath, 
+        const ImVec2& size,
+        const ImVec2& uv0, const ImVec2& uv1,
+        const ImVec4& tint_col, const ImVec4& border_col)
+    {
+        ImageFromAsset(assetPath, false, size, uv0, uv1, tint_col, border_col);
+    }
+
+    void ImageFromMemory(
+        const char *assetName, MemoryImage image,
+        const ImVec2& size,
+        const ImVec2& uv0, const ImVec2& uv1,
+        const ImVec4& tint_col, const ImVec4& border_col) 
+    {
+        auto cachedImage = _GetCachedMemoryImage(assetName, image.image_buffer_rgba, image.width, image.height);
+        _CachedImGuiImage(cachedImage, size, uv0, uv1, tint_col, border_col, "ImageFromMemory: fail!");
+    }
+
+    void ImageFromMemory(
+        const char *assetName,
+        const ImVec2& size,
+        const ImVec2& uv0, const ImVec2& uv1,
+        const ImVec4& tint_col, const ImVec4& border_col) 
+    {
+        ImageFromMemory(assetName, {}, size, uv0, uv1, tint_col, border_col);
+    }
+
+
+    inline bool _CachedImguiImageButton(
+        ImageAbstractPtr & cachedImage,
+        const char *str_id,  const ImVec2& size, const ImVec2& uv0,  const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col,
+        const char *txtFail)
+    {
         if (cachedImage == nullptr)
         {
-            ImGui::TextColored(ImVec4(1.f, 0.f, 0.f, 1.f), "ImageButtonFromAsset: fail!");
+            ImGui::TextColored(ImVec4(1.f, 0.f, 0.f, 1.f), txtFail);
             return false;
         }
         auto textureId = cachedImage->TextureID();
         auto imageSize = ImVec2((float)cachedImage->Width, (float)cachedImage->Height);
         ImVec2 displayedSize = ImageProportionalSize(size, imageSize);
-        bool clicked = ImGui::ImageButton(assetPath, textureId, displayedSize, uv0, uv1, bg_col, tint_col);
+        bool clicked = ImGui::ImageButton(str_id, textureId, displayedSize, uv0, uv1, bg_col, tint_col);
         return clicked;
     }
 
-    ImTextureID ImTextureIdFromAsset(const char *assetPath)
+    bool ImageButtonFromAsset(const char *assetPath, bool updateCache,  const ImVec2& size, const ImVec2& uv0,  const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col)
     {
-        auto cachedImage = _GetCachedImage(assetPath);
+        auto cachedImage = _GetCachedAssetImage(assetPath, updateCache);
+        return _CachedImguiImageButton(cachedImage, assetPath, size, uv0, uv1, frame_padding, bg_col, tint_col, "ImageButtonFromAsset: fail!");
+    }
+
+    bool ImageButtonFromAsset(const char *assetPath, const ImVec2& size, const ImVec2& uv0,  const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col)
+    {
+        return ImageButtonFromAsset(assetPath, false, size, uv0, uv1, frame_padding, bg_col, tint_col);
+    }
+
+    bool ImageButtonFromMemory(const char *assetName, MemoryImage image, const ImVec2& size, const ImVec2& uv0,  const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col)
+    {
+        auto cachedImage = _GetCachedMemoryImage(assetName, image.image_buffer_rgba, image.width, image.height);
+        return _CachedImguiImageButton(cachedImage, assetName, size, uv0, uv1, frame_padding, bg_col, tint_col, "ImageButtonFromMemory: fail!");
+    }
+
+    bool (const char *assetName, const ImVec2& size, const ImVec2& uv0,  const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col)
+    {
+        ImageButtonFromMemory(assetName, {}, size, uv0, uv1, frame_padding, bg_col, tint_col);
+    }
+
+    ImTextureID ImTextureIdFromAsset(const char *assetPath, bool updateCache)
+    {
+        auto cachedImage = _GetCachedAssetImage(assetPath, updateCache);
         if (cachedImage == nullptr)
             return ImTextureID(0);
         return cachedImage->TextureID();
     }
 
-    ImVec2 ImageSizeFromAsset(const char *assetPath)
+    ImTextureID ImTextureIdFromAsset(const char *assetPath)
     {
-        auto cachedImage = _GetCachedImage(assetPath);
+        return ImTextureIdFromAsset(assetPath, false);
+    }
+
+    ImTextureID ImTextureIdFromMemory(const char *assetName, MemoryImage image)
+    {
+        auto cachedImage = _GetCachedMemoryImage(assetName, image.image_buffer_rgba, image.width, image.height);
+        if (cachedImage == nullptr)
+            return ImTextureID(0);
+        return cachedImage->TextureID();
+    }
+    
+    ImTextureID ImTextureIdFromMemory(const char *assetName) 
+    { 
+        return ImTextureIdFromMemory(assetName, {});
+    }
+
+    ImVec2 ImageSizeFromAsset(const char *assetPath, bool updateCache)
+    {
+        auto cachedImage = _GetCachedAssetImage(assetPath, updateCache);
         if (cachedImage == nullptr)
             return ImVec2(0.f, 0.f);
         return ImVec2((float)cachedImage->Width, (float)cachedImage->Height);
     }
 
-    ImageAndSize ImageAndSizeFromAsset(const char *assetPath)
+    ImVec2 ImageSizeFromAsset(const char *assetPath)
     {
-        auto cachedImage = _GetCachedImage(assetPath);
+        return ImageSizeFromAsset(assetPath, false);
+    }
+
+    ImVec2 ImageSizeFromMemory(const char *assetName, MemoryImage image)
+    {
+        auto cachedImage = _GetCachedMemoryImage(assetName, image.image_buffer_rgba, image.width, image.height);
+        if (cachedImage == nullptr)
+            return ImVec2(0.f, 0.f);
+        return ImVec2((float)cachedImage->Width, (float)cachedImage->Height);
+    }
+
+    ImVec2 ImageSizeFromMemory(const char *assetName)
+    {
+        return ImageSizeFromMemory(assetName, {});
+    }
+
+
+    ImageAndSize ImageAndSizeFromAsset(const char *assetPath, bool updateCache)
+    {
+        auto cachedImage = _GetCachedAssetImage(assetPath, updateCache);
         if (cachedImage == nullptr)
             return {};
         return {cachedImage->TextureID(), ImVec2((float)cachedImage->Width, (float)cachedImage->Height)};
+    }
+
+    ImageAndSize ImageAndSizeFromAsset(const char *assetPath)
+    {
+        return ImageAndSizeFromAsset(assetPath, false);
+    }
+
+
+    ImageAndSize ImageAndSizeFromMemory(const char *assetName, MemoryImage image)
+    {
+        auto cachedImage = _GetCachedMemoryImage(assetName, image.image_buffer_rgba, image.width, image.height);
+        if (cachedImage == nullptr)
+            return {};
+        return {cachedImage->TextureID(), ImVec2((float)cachedImage->Width, (float)cachedImage->Height)};
+    }
+
+    ImageAndSize ImageAndSizeFromMemory(const char *assetName)
+    {
+        return ImageAndSizeFromMemory(assetName, {});
     }
 
     namespace internal

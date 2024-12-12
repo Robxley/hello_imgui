@@ -17,6 +17,11 @@ namespace HelloImGui
         virtual ~ImageAbstract();
 
         virtual void _impl_StoreTexture(int width, int height, unsigned char* image_data_rgba) = 0;
+        virtual void _impl_UploadTexture(int width, int height, unsigned char* image_data_rgba) {
+            _impl_ReleaseTexture();
+            _impl_StoreTexture(width, height, image_data_rgba);
+        };
+        virtual void _impl_ReleaseTexture() = 0;
     };
 
     using ImageAbstractPtr = std::shared_ptr<ImageAbstract>;

@@ -52,10 +52,14 @@ namespace HelloImGui
 
     }
 
+    void ImageMetal::_impl_ReleaseTexture() 
+    {
+        [Texture release];
+    }
 
     ImageMetal::~ImageMetal()
     {
-        [Texture release];
+        _impl_ReleaseTexture();
     }
 
     ImTextureID ImageMetal::TextureID()

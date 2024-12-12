@@ -14,6 +14,7 @@ namespace HelloImGui
 
         ImTextureID TextureID() override;
         void _impl_StoreTexture(int width, int height, unsigned char* image_data_rgba) override;
+        void _impl_ReleaseTexture() override;
 
         ID3D11ShaderResourceView* ShaderResourceView = nullptr;
     };

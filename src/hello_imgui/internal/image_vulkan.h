@@ -14,7 +14,8 @@ namespace HelloImGui
 
         ImTextureID TextureID() override;
         void _impl_StoreTexture(int width, int height, unsigned char* image_data_rgba) override;
-
+        void _impl_ReleaseTexture() override;
+        
         // Specific to Vulkan
         VkDescriptorSet DS;
         static constexpr int Channels = 4; // We intentionally only support RGBA for now
