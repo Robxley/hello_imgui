@@ -243,7 +243,7 @@ namespace HelloImGui
         return _CachedImguiImageButton(cachedImage, assetName, size, uv0, uv1, frame_padding, bg_col, tint_col, "ImageButtonFromMemory: fail!");
     }
 
-    bool (const char *assetName, const ImVec2& size, const ImVec2& uv0,  const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col)
+    bool ImageButtonFromMemory(const char *assetName, const ImVec2& size, const ImVec2& uv0,  const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col)
     {
         ImageButtonFromMemory(assetName, {}, size, uv0, uv1, frame_padding, bg_col, tint_col);
     }
