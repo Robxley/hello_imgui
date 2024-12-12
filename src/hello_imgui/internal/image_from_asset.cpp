@@ -245,7 +245,7 @@ namespace HelloImGui
 
     bool ImageButtonFromMemory(const char *assetName, const ImVec2& size, const ImVec2& uv0,  const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col)
     {
-        ImageButtonFromMemory(assetName, {}, size, uv0, uv1, frame_padding, bg_col, tint_col);
+        return ImageButtonFromMemory(assetName, {}, size, uv0, uv1, frame_padding, bg_col, tint_col);
     }
 
     ImTextureID ImTextureIdFromAsset(const char *assetPath, bool updateCache)
